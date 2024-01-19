@@ -60,13 +60,23 @@ class VaryingSizeGrid:
 
     # Attempts to find the lowest empty x pixel corresponding to the passed pixel.
     def find_next_empty_x_pixel(self, y: int):
-        empty_x_pixel = 0
-        for pixel_ranges in self.used_pixels:
-            if y not in pixel_ranges[1]:
-                continue
-            empty_x_pixel = max(empty_x_pixel, pixel_ranges[0][-1])
+        if not self.used_pixels:
+            return 0
 
-        return empty_x_pixel
+        for x in range(0, self.width):
+            used_pixel = False
+            for pixel_range in self.used_pixels:
+                if y not in pixel_range[1]:
+                    continue
+                if x not in pixel_range[0]:
+                    continue
+
+                used_pixel = True
+                break
+            if used_pixel:
+                continue
+
+            return x
 
     # Attempts to find the lowest empty y pixel corresponding to the passed x pixel.
     def find_next_empty_y_pixel(self, x: int):
@@ -75,34 +85,36 @@ class VaryingSizeGrid:
             if x not in pixel_ranges[0]:
                 continue
 
-            empty_y_pixel = max(empty_y_pixel, pixel_ranges[1][-1])
+            empty_y_pixel = max(empty_y_pixel, pixel_ranges[1][-1] + 1)
 
         return empty_y_pixel
 
     # Generates the grid image.
     def generate(self):
         grid_image = Image.new('RGB', (self.width, self.height), (255, 255, 255))
-        x = 0
-        while x < self.width:
-            y = self.find_next_empty_y_pixel(x)
-            print(f"X: {x} Y: {y}")
-
+        y = 0
+        failed_fitting_image_attempts = 0
+        while True:
+            x = self.find_next_empty_x_pixel(y)
+            # print(f"X: {x} Y: {y}")
             image = self.pick_random_fitting_image(x, y)
             if image is None:
-                if x >= self.width - 1000:
+                if y == self.height:
                     break
-                if y >= self.height - 200:
-                    y = 0
-                x = self.find_next_empty_x_pixel(y) + 1
+
+                y += 1
                 continue
 
             self.used_pixels.append((range(x, x + image.width), range(y, y + image.height)))
+            print(f"PASTING IMAGE AT X: {x} Y: {y}")
+            print(f"USED PIXELS: {self.used_pixels}")
             grid_image.paste(image, (x, y))
+            x += image.width
 
         return grid_image
 
 
-INPUT_DIRECTORY = "/media/HDD/Pictures/ImageGridGenerator/Input/"
+INPUT_DIRECTORY = "/home/william/Pictures/ImageGridGenerator/Input/"
 GRID_DIMENSIONS = (4, 4)
 RESOLUTION = (2160, 3840)
 TOTAL_GENERATIONS = 50
@@ -131,7 +143,7 @@ RANDOM_ELEMENT_MODIFIER_OPTIONS = [
     200
 ]
 
-OUTPUT_DIRECTORY = "/media/HDD/Pictures/ImageGridGenerator/Output/"
+OUTPUT_DIRECTORY = "/home/william/Pictures/ImageGridGenerator/Output/"
 
 
 # Creates the image grid.
