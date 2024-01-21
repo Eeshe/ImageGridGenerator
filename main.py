@@ -3,7 +3,7 @@ import random
 
 from PIL import Image
 from os import listdir
-from time import time
+from time import time, sleep
 from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -34,6 +34,8 @@ def pick_random_image_file(used_images: list) -> str | None:
 
         return image_file
 
+    return None
+
 
 class VaryingSizeGrid:
 
@@ -43,40 +45,50 @@ class VaryingSizeGrid:
         self.used_images = []
         self.used_pixels = []
 
+    # Search the closest x pixel that would limit the pasting of an image.
+    def search_closest_limit(self, x: int, y: int) -> int:
+        for pixel_range in self.used_pixels:
+            # print(f"PIXEL RANGE: {pixel_range}")
+            # print(f"X: {x} Y: {y}")
+            if y not in pixel_range[1]:
+                continue
+            if x > pixel_range[0][-1]:
+                continue
+
+            # print(f"RETURNING: {pixel_range[0][0]}")
+            return pixel_range[0][0]
+
+        return self.width
+
     # Picks a random image that fits within the remaining space.
     def pick_random_fitting_image(self, current_x: int, current_y: int):
-        remaining_x = self.width - current_x
+        remaining_x = self.search_closest_limit(current_x, current_y) - current_x
         remaining_y = self.height - current_y
-        for attempt in range(100):
-            image_file = pick_random_image_file(self.used_images)
-            image = Image.open(image_file)
-            if image.width > remaining_x or image.height > remaining_y:
+        image_files = listdir(INPUT_DIRECTORY)
+        if not image_files:
+            return None
+
+        random.shuffle(image_files)
+        for image_file in image_files:
+            if image_file in self.used_images:
                 continue
+
+            image = Image.open(INPUT_DIRECTORY + image_file)
+            x_difference_percentage = abs((image.width / remaining_x))
+            if image.width > remaining_x or image.height > remaining_y:
+                # if x_difference_percentage > 1.5:
+                #     continue
+
+                image = image.resize((remaining_x, int(remaining_x / (image.width / image.height))))
+            elif x_difference_percentage > 0.5:
+                image = image.resize((remaining_x, int(remaining_x / (image.width / image.height))))
+            #     image = image.resize((abs(int(image.width + image.width * x_difference_percentage)),
+            #                           abs(int(image.height + image.height * x_difference_percentage))))
 
             self.used_images.append(image_file)
             return image
 
         return None
-
-    # Attempts to find the lowest empty x pixel corresponding to the passed pixel.
-    def find_next_empty_x_pixel(self, y: int):
-        if not self.used_pixels:
-            return 0
-
-        for x in range(0, self.width):
-            used_pixel = False
-            for pixel_range in self.used_pixels:
-                if y not in pixel_range[1]:
-                    continue
-                if x not in pixel_range[0]:
-                    continue
-
-                used_pixel = True
-                break
-            if used_pixel:
-                continue
-
-            return x
 
     # Attempts to find the lowest empty y pixel corresponding to the passed x pixel.
     def find_next_empty_y_pixel(self, x: int):
@@ -93,28 +105,36 @@ class VaryingSizeGrid:
     def generate(self):
         grid_image = Image.new('RGB', (self.width, self.height), (255, 255, 255))
         y = 0
-        failed_fitting_image_attempts = 0
-        while True:
-            x = self.find_next_empty_x_pixel(y)
-            # print(f"X: {x} Y: {y}")
-            image = self.pick_random_fitting_image(x, y)
-            if image is None:
-                if y == self.height:
+        while y < self.height:
+            x = 0
+            while x < self.width:
+                used_pixel = False
+                for pixel_ranges in self.used_pixels:
+                    if y not in pixel_ranges[1]:
+                        continue
+                    if x not in pixel_ranges[0]:
+                        continue
+
+                    used_pixel = True
+                    break
+                if used_pixel:
+                    x += 1
+                    continue
+
+                image = self.pick_random_fitting_image(x, y)
+                if image is None:
                     break
 
-                y += 1
-                continue
+                self.used_pixels.append((range(x, x + image.width), range(y, y + image.height)))
+                grid_image.paste(image, (x, y))
+                x += image.width
 
-            self.used_pixels.append((range(x, x + image.width), range(y, y + image.height)))
-            print(f"PASTING IMAGE AT X: {x} Y: {y}")
-            print(f"USED PIXELS: {self.used_pixels}")
-            grid_image.paste(image, (x, y))
-            x += image.width
+            y += 1
 
         return grid_image
 
 
-INPUT_DIRECTORY = "/home/william/Pictures/ImageGridGenerator/Input/"
+INPUT_DIRECTORY = "/media/HDD/Pictures/ImageGridGenerator/Input/"
 GRID_DIMENSIONS = (4, 4)
 RESOLUTION = (2160, 3840)
 TOTAL_GENERATIONS = 50
@@ -143,7 +163,7 @@ RANDOM_ELEMENT_MODIFIER_OPTIONS = [
     200
 ]
 
-OUTPUT_DIRECTORY = "/home/william/Pictures/ImageGridGenerator/Output/"
+OUTPUT_DIRECTORY = "/media/HDD/Pictures/ImageGridGenerator/Output/"
 
 
 # Creates the image grid.
@@ -205,7 +225,7 @@ def generate_and_save_grid(generation_count: int):
 
 def main() -> None:
     start = time()
-    image = VaryingSizeGrid((7680, 8640)).generate()
+    image = VaryingSizeGrid((5760, 8640)).generate()
     end = time()
     print(f"GRID GENERATION TOOK {end - start}ms")
     image.save(f'{OUTPUT_DIRECTORY}/output.jpg')
