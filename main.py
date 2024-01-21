@@ -75,16 +75,19 @@ class VaryingSizeGrid:
 
             image = Image.open(INPUT_DIRECTORY + image_file)
             x_difference_percentage = abs((image.width / remaining_x))
-            if image.width > remaining_x or image.height > remaining_y:
-                # if x_difference_percentage > 1.5:
-                #     continue
+            y_difference_percentage = abs((image.height / remaining_y))
+            if image.width > remaining_x or x_difference_percentage > 0.5:
+                # Resize X
+                new_x = remaining_x
+                new_y = min(remaining_y, int(remaining_x / (image.width / image.height)))
+            elif image.height > remaining_y or y_difference_percentage > 0.5:
+                # Resize Y
+                new_x = min(remaining_x, int(remaining_y / (image.width / image.height)))
+                new_y = remaining_y
+            else:
+                return image
 
-                image = image.resize((remaining_x, int(remaining_x / (image.width / image.height))))
-            elif x_difference_percentage > 0.5:
-                image = image.resize((remaining_x, int(remaining_x / (image.width / image.height))))
-            #     image = image.resize((abs(int(image.width + image.width * x_difference_percentage)),
-            #                           abs(int(image.height + image.height * x_difference_percentage))))
-
+            image = image.resize((new_x, new_y))
             self.used_images.append(image_file)
             return image
 
@@ -228,7 +231,7 @@ def main() -> None:
     image = VaryingSizeGrid((5760, 8640)).generate()
     end = time()
     print(f"GRID GENERATION TOOK {end - start}ms")
-    image.save(f'{OUTPUT_DIRECTORY}/output.jpg')
+    image.save(f'{OUTPUT_DIRECTORY}output.jpg')
 
     # with tqdm(total=TOTAL_GENERATIONS) as progress_bar:
     #     with ThreadPoolExecutor(max_workers=20) as executor:
