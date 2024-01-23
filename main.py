@@ -37,28 +37,82 @@ def pick_random_image_file(used_images: list) -> str | None:
     return None
 
 
+# General settings
+INPUT_DIRECTORY = "/media/HDD/Pictures/ImageGridGenerator/Input"
+RESOLUTION = (5760, 10688)
+TOTAL_GENERATIONS = 40
+OUTPUT_DIRECTORY = "/media/HDD/Pictures/ImageGridGenerator/Output"
+
+# Uniform Grid
+GRID_DIMENSIONS = (4, 4)
+GRID_ELEMENT_MODIFIERS = [
+    # GridElementModifier([], [1, 3], top_margin=200, bottom_margin=200),
+    GridElementModifier([], [0], right_margin=200),
+    GridElementModifier([], [3], left_margin=200),
+    GridElementModifier([0], [], bottom_margin=200),
+    GridElementModifier([3], [], top_margin=200),
+    # GridElementModifier([], [0, 2], left_margin=100, right_margin=100,),
+]
+
+RANDOM_GRID_DIMENSIONS_OPTIONS = [
+    (2, 2),
+    (3, 3),
+    (4, 4),
+    (5, 5),
+    (6, 6),
+    (7, 7)
+]
+
+# The amount of px the script can randomly use for top, right, bottom or left margin.
+RANDOM_ELEMENT_MODIFIER_OPTIONS = [
+    0,
+    100,
+    200
+]
+
+# VaryingSizeGrid
+TOP_IMG_MARGIN = 25
+RIGHT_IMG_MARGIN = 25
+BOTTOM_IMG_MARGIN = 25
+LEFT_IMG_MARGIN = 25
+MARGIN_COLOR = (255, 0, 255)
+
+
 class VaryingSizeGrid:
 
-    def __init__(self, dimensions: tuple):
+    def __init__(self, dimensions: tuple, top_img_margin: int = 0, right_img_margin: int = 0,
+                 bottom_img_margin: int = 0,
+                 left_img_margin: int = 0, margin_color: tuple = (0, 0, 0)):
         self.width = dimensions[0]
         self.height = dimensions[1]
         self.used_images = []
         self.used_pixels = []
+        self.top_img_margin = top_img_margin
+        self.right_img_margin = right_img_margin
+        self.bottom_img_margin = bottom_img_margin
+        self.left_img_margin = left_img_margin
+        self.margin_color = margin_color
 
     # Search the closest x pixel that would limit the pasting of an image.
     def search_closest_limit(self, x: int, y: int) -> int:
         for pixel_range in self.used_pixels:
-            # print(f"PIXEL RANGE: {pixel_range}")
-            # print(f"X: {x} Y: {y}")
             if y not in pixel_range[1]:
                 continue
             if x > pixel_range[0][-1]:
                 continue
 
-            # print(f"RETURNING: {pixel_range[0][0]}")
             return pixel_range[0][0]
 
         return self.width
+
+    # Applies the configured margins to the passed image.
+    def apply_image_margins(self, image: Image) -> Image:
+        additional_width = self.left_img_margin + self.right_img_margin
+        additional_height = self.top_img_margin + self.bottom_img_margin
+        margin_image = Image.new('RGB', (image.width + additional_width, image.height + additional_height),
+                                 self.margin_color)
+        margin_image.paste(image, (self.left_img_margin, self.top_img_margin))
+        return margin_image
 
     # Picks a random image that fits within the remaining space.
     def pick_random_fitting_image(self, current_x: int, current_y: int):
@@ -70,12 +124,12 @@ class VaryingSizeGrid:
 
         random.shuffle(image_files)
         for image_file in image_files:
-            print(f"IMAGE: {image_file}\nUSED IMAGES: {self.used_images}")
             if image_file in self.used_images:
                 continue
 
             self.used_images.append(image_file)
-            image = Image.open(INPUT_DIRECTORY + image_file)
+            image = Image.open(f"{INPUT_DIRECTORY}/{image_file}")
+            image = self.apply_image_margins(image)
             x_difference_percentage = abs((image.width / remaining_x))
             y_difference_percentage = abs((image.height / remaining_y))
             if image.width > remaining_x or x_difference_percentage > 0.5:
@@ -107,7 +161,7 @@ class VaryingSizeGrid:
 
     # Generates the grid image.
     def generate(self):
-        grid_image = Image.new('RGB', (self.width, self.height), (255, 255, 255))
+        grid_image = Image.new('RGB', (self.width, self.height))
         y = 0
         while y < self.height:
             x = 0
@@ -135,38 +189,6 @@ class VaryingSizeGrid:
                 x += image.width
 
         return grid_image
-
-
-INPUT_DIRECTORY = "/home/william/Pictures/ImageGridGenerator/Input/"
-GRID_DIMENSIONS = (4, 4)
-RESOLUTION = (2160, 3840)
-TOTAL_GENERATIONS = 50
-GRID_ELEMENT_MODIFIERS = [
-    # GridElementModifier([], [1, 3], top_margin=200, bottom_margin=200),
-    GridElementModifier([], [0], right_margin=200),
-    GridElementModifier([], [3], left_margin=200),
-    GridElementModifier([0], [], bottom_margin=200),
-    GridElementModifier([3], [], top_margin=200),
-    # GridElementModifier([], [0, 2], left_margin=100, right_margin=100,),
-]
-
-RANDOM_GRID_DIMENSIONS_OPTIONS = [
-    (2, 2),
-    (3, 3),
-    (4, 4),
-    (5, 5),
-    (6, 6),
-    (7, 7)
-]
-
-# The amount of px the script can randomly use for top, right, bottom or left margin.
-RANDOM_ELEMENT_MODIFIER_OPTIONS = [
-    0,
-    100,
-    200
-]
-
-OUTPUT_DIRECTORY = "/home/william/Pictures/ImageGridGenerator/Output/"
 
 
 # Creates the image grid.
@@ -226,21 +248,23 @@ def generate_and_save_grid(generation_count: int):
     image.save(f'{OUTPUT_DIRECTORY}/{generation_count}.jpg')
 
 
-def main() -> None:
-    start = time()
-    image = VaryingSizeGrid((5760, 10688)).generate()
-    end = time()
-    print(f"GRID GENERATION TOOK {end - start}ms")
-    image.save(f'{OUTPUT_DIRECTORY}output.jpg')
+# Generates and saves a varying size grid with the passed parameters. Used for threading.
+def generate_and_save_varying_size_grid(generation_count: int):
+    image = VaryingSizeGrid(RESOLUTION, top_img_margin=TOP_IMG_MARGIN, right_img_margin=RIGHT_IMG_MARGIN,
+                            bottom_img_margin=BOTTOM_IMG_MARGIN, left_img_margin=LEFT_IMG_MARGIN,
+                            margin_color=MARGIN_COLOR).generate()
+    image.save(f'{OUTPUT_DIRECTORY}/{generation_count}.jpg')
 
-    # with tqdm(total=TOTAL_GENERATIONS) as progress_bar:
-    #     with ThreadPoolExecutor(max_workers=20) as executor:
-    #         futures = [executor.submit(generate_and_save_grid, generation_count) for generation_count in
-    #                    range(1, TOTAL_GENERATIONS + 1)]
-    #
-    #         for future in as_completed(futures):
-    #             future.result()
-    #             progress_bar.update(1)
+
+def main() -> None:
+    with tqdm(total=TOTAL_GENERATIONS) as progress_bar:
+        with ThreadPoolExecutor(max_workers=20) as executor:
+            futures = [executor.submit(generate_and_save_varying_size_grid, generation_count) for generation_count in
+                       range(1, TOTAL_GENERATIONS + 1)]
+
+            for future in as_completed(futures):
+                future.result()
+                progress_bar.update(1)
 
 
 if __name__ == '__main__':
