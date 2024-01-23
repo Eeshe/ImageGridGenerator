@@ -65,14 +65,16 @@ class VaryingSizeGrid:
         remaining_x = self.search_closest_limit(current_x, current_y) - current_x
         remaining_y = self.height - current_y
         image_files = listdir(INPUT_DIRECTORY)
-        if not image_files:
+        if not image_files or remaining_y == 0:
             return None
 
         random.shuffle(image_files)
         for image_file in image_files:
+            print(f"IMAGE: {image_file}\nUSED IMAGES: {self.used_images}")
             if image_file in self.used_images:
                 continue
 
+            self.used_images.append(image_file)
             image = Image.open(INPUT_DIRECTORY + image_file)
             x_difference_percentage = abs((image.width / remaining_x))
             y_difference_percentage = abs((image.height / remaining_y))
@@ -88,7 +90,6 @@ class VaryingSizeGrid:
                 return image
 
             image = image.resize((new_x, new_y))
-            self.used_images.append(image_file)
             return image
 
         return None
@@ -111,6 +112,7 @@ class VaryingSizeGrid:
         while y < self.height:
             x = 0
             while x < self.width:
+                y = self.find_next_empty_y_pixel(x)
                 used_pixel = False
                 for pixel_ranges in self.used_pixels:
                     if y not in pixel_ranges[1]:
@@ -132,12 +134,10 @@ class VaryingSizeGrid:
                 grid_image.paste(image, (x, y))
                 x += image.width
 
-            y += 1
-
         return grid_image
 
 
-INPUT_DIRECTORY = "/media/HDD/Pictures/ImageGridGenerator/Input/"
+INPUT_DIRECTORY = "/home/william/Pictures/ImageGridGenerator/Input/"
 GRID_DIMENSIONS = (4, 4)
 RESOLUTION = (2160, 3840)
 TOTAL_GENERATIONS = 50
@@ -166,7 +166,7 @@ RANDOM_ELEMENT_MODIFIER_OPTIONS = [
     200
 ]
 
-OUTPUT_DIRECTORY = "/media/HDD/Pictures/ImageGridGenerator/Output/"
+OUTPUT_DIRECTORY = "/home/william/Pictures/ImageGridGenerator/Output/"
 
 
 # Creates the image grid.
@@ -228,7 +228,7 @@ def generate_and_save_grid(generation_count: int):
 
 def main() -> None:
     start = time()
-    image = VaryingSizeGrid((5760, 8640)).generate()
+    image = VaryingSizeGrid((5760, 10688)).generate()
     end = time()
     print(f"GRID GENERATION TOOK {end - start}ms")
     image.save(f'{OUTPUT_DIRECTORY}output.jpg')
