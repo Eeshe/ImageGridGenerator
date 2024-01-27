@@ -71,27 +71,50 @@ RANDOM_ELEMENT_MODIFIER_OPTIONS = [
 ]
 
 # VaryingSizeGrid
+TOP_GRID_MARGIN = 25
+RIGHT_GRID_MARGIN = 25
+BOTTOM_GRID_MARGIN = 25
+LEFT_GRID_MARGIN = 25
+GRID_MARGIN_COLOR = (0, 0, 255)
+
 TOP_IMG_MARGIN = 25
 RIGHT_IMG_MARGIN = 25
 BOTTOM_IMG_MARGIN = 25
 LEFT_IMG_MARGIN = 25
-MARGIN_COLOR = (255, 0, 255)
+IMG_MARGIN_COLOR = (255, 0, 0)
+
+
+# Applies the passed margins to the passed image.
+def _apply_margins(image: Image, top: int, right: int, bottom: int, left: int, color: tuple):
+    total_margin_width = left + right
+    total_margin_height = top + bottom
+    margin_image = Image.new('RGB', (image.width, image.height), color)
+    image = image.resize((image.width - total_margin_width, image.height - total_margin_height))
+    margin_image.paste(image, (left, top))
+
+    return margin_image
 
 
 class VaryingSizeGrid:
 
-    def __init__(self, dimensions: tuple, top_img_margin: int = 0, right_img_margin: int = 0,
-                 bottom_img_margin: int = 0,
-                 left_img_margin: int = 0, margin_color: tuple = (0, 0, 0)):
+    def __init__(self, dimensions: tuple, top_grid_margin: int = 0, right_grid_margin: int = 0,
+                 bottom_grid_margin: int = 0, left_grid_margin: int = 0, grid_margin_color: tuple = (0, 0, 0),
+                 top_img_margin: int = 0, right_img_margin: int = 0, bottom_img_margin: int = 0,
+                 left_img_margin: int = 0, img_margin_color: tuple = (0, 0, 0)):
         self.width = dimensions[0]
         self.height = dimensions[1]
         self.used_images = []
         self.used_pixels = []
+        self.top_grid_margin = top_grid_margin
+        self.right_grid_margin = right_grid_margin
+        self.bottom_grid_margin = bottom_grid_margin
+        self.left_grid_margin = left_grid_margin
+        self.grid_margin_color = grid_margin_color
         self.top_img_margin = top_img_margin
         self.right_img_margin = right_img_margin
         self.bottom_img_margin = bottom_img_margin
         self.left_img_margin = left_img_margin
-        self.margin_color = margin_color
+        self.img_margin_color = img_margin_color
 
     # Search the closest x pixel that would limit the pasting of an image.
     def search_closest_limit(self, x: int, y: int) -> int:
@@ -105,18 +128,20 @@ class VaryingSizeGrid:
 
         return self.width
 
-    # Applies the configured margins to the passed image.
+    # Applies the configured grid margins to the passed image.
+    def apply_grid_margins(self, image: Image) -> Image:
+        return _apply_margins(image, self.top_grid_margin, self.right_grid_margin, self.bottom_grid_margin,
+                              self.left_grid_margin, self.grid_margin_color)
+
+    # Applies the configured image margins to the passed image.
     def apply_image_margins(self, image: Image) -> Image:
-        additional_width = self.left_img_margin + self.right_img_margin
-        additional_height = self.top_img_margin + self.bottom_img_margin
-        margin_image = Image.new('RGB', (image.width + additional_width, image.height + additional_height),
-                                 self.margin_color)
-        margin_image.paste(image, (self.left_img_margin, self.top_img_margin))
-        return margin_image
+        return _apply_margins(image, self.top_img_margin, self.right_img_margin, self.bottom_img_margin,
+                              self.left_img_margin, self.img_margin_color)
 
     # Picks a random image that fits within the remaining space.
     def pick_random_fitting_image(self, current_x: int, current_y: int):
         remaining_x = self.search_closest_limit(current_x, current_y) - current_x
+        print(f"{self.height} - {current_y}")
         remaining_y = self.height - current_y
         image_files = listdir(INPUT_DIRECTORY)
         if not image_files or remaining_y == 0:
@@ -129,9 +154,8 @@ class VaryingSizeGrid:
 
             self.used_images.append(image_file)
             image = Image.open(f"{INPUT_DIRECTORY}/{image_file}")
-            image = self.apply_image_margins(image)
-            x_difference_percentage = abs((image.width / remaining_x))
-            y_difference_percentage = abs((image.height / remaining_y))
+            x_difference_percentage = abs((image.width - self.left_grid_margin - self.right_grid_margin / remaining_x))
+            y_difference_percentage = abs((image.height - self.top_grid_margin - self.bottom_grid_margin / remaining_y))
             if image.width > remaining_x or x_difference_percentage > 0.5:
                 # Resize X
                 new_x = remaining_x
@@ -157,14 +181,15 @@ class VaryingSizeGrid:
 
             empty_y_pixel = max(empty_y_pixel, pixel_ranges[1][-1] + 1)
 
-        return empty_y_pixel
+        return empty_y_pixel + self.top_grid_margin
 
     # Generates the grid image.
     def generate(self):
         grid_image = Image.new('RGB', (self.width, self.height))
+        grid_image = self.apply_grid_margins(grid_image)
         y = 0
         while y < self.height:
-            x = 0
+            x = self.left_grid_margin
             while x < self.width:
                 y = self.find_next_empty_y_pixel(x)
                 used_pixel = False
@@ -184,6 +209,7 @@ class VaryingSizeGrid:
                 if image is None:
                     break
 
+                image = self.apply_image_margins(image)
                 self.used_pixels.append((range(x, x + image.width), range(y, y + image.height)))
                 grid_image.paste(image, (x, y))
                 x += image.width
@@ -250,9 +276,18 @@ def generate_and_save_grid(generation_count: int):
 
 # Generates and saves a varying size grid with the passed parameters. Used for threading.
 def generate_and_save_varying_size_grid(generation_count: int):
-    image = VaryingSizeGrid(RESOLUTION, top_img_margin=TOP_IMG_MARGIN, right_img_margin=RIGHT_IMG_MARGIN,
-                            bottom_img_margin=BOTTOM_IMG_MARGIN, left_img_margin=LEFT_IMG_MARGIN,
-                            margin_color=MARGIN_COLOR).generate()
+    image = VaryingSizeGrid(
+        RESOLUTION,
+        top_grid_margin=TOP_GRID_MARGIN,
+        right_grid_margin=BOTTOM_GRID_MARGIN,
+        bottom_grid_margin=RIGHT_GRID_MARGIN,
+        left_grid_margin=LEFT_GRID_MARGIN,
+        grid_margin_color=GRID_MARGIN_COLOR,
+        top_img_margin=TOP_IMG_MARGIN,
+        right_img_margin=RIGHT_IMG_MARGIN,
+        bottom_img_margin=BOTTOM_IMG_MARGIN,
+        left_img_margin=LEFT_IMG_MARGIN,
+        img_margin_color=IMG_MARGIN_COLOR).generate()
     image.save(f'{OUTPUT_DIRECTORY}/{generation_count}.jpg')
 
 
